@@ -8,7 +8,7 @@ struct BroadcastPicker: UIViewRepresentable {
         v.showsMicrophoneButton = false
         return v
     }
-    func updateUIView(_ uiView: RPSystemBroadcastPickerView, updateContext context: Context) {}
+    func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {}
 }
 
 struct ContentView: View {

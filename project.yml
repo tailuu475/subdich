@@ -1,0 +1,54 @@
+name: SubDich
+options:
+  bundleIdPrefix: com.subdich
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+targets:
+  SubDich:
+    type: application
+    platform: iOS
+    sources: [SubDich, Shared]
+    info:
+      path: SubDich/Info.plist
+      properties:
+        CFBundleDisplayName: Dich phu de
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+    entitlements:
+      path: SubDich/SubDich.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.subdich.app]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.subdich.app
+    dependencies:
+      - target: broadcast
+        embed: true
+  broadcast:
+    type: app-extension
+    platform: iOS
+    sources: [broadcast, Shared]
+    info:
+      path: broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: broadcast
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    entitlements:
+      path: broadcast/broadcast.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.subdich.app]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.subdich.app.broadcast
+schemes:
+  SubDich:
+    build:
+      targets:
+        SubDich: all

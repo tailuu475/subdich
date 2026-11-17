@@ -1,28 +1,84 @@
-name: Build IPA
+name: Build IPA (chưa ký)
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 jobs:
-  build:
-    runs-on: macos-latest
+  ipa:
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Cai XcodeGen
-        run: brew install xcodegen
-      - name: Tao project Xcode
-        run: xcodegen generate
-      - name: Build (khong ky)
+
+      - uses: actions/cache@v4
+        with:
+          path: ConsoleSub-github/chiaki-prebuilt
+          key: chiaki-ios-v1
+
+      - name: Build Chiaki cho iOS (lỗi thì bỏ qua)
+        continue-on-error: true
         run: |
-          xcodebuild -project SubDich.xcodeproj -scheme SubDich -configuration Release \
-            -sdk iphoneos -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
-      - name: Dong goi IPA
+          if ls ConsoleSub-github/chiaki-prebuilt/lib/*.a >/dev/null 2>&1; then
+            echo "Đã có cache Chiaki"; exit 0
+          fi
+          set -euxo pipefail
+          W=$RUNNER_TEMP/cb; mkdir -p $W; cd $W
+          P=$W/prefix; mkdir -p $P
+          python3 -m venv venv; . venv/bin/activate
+          pip install protobuf
+          brew install protobuf cmake ninja
+          git clone --depth 1 https://github.com/leetal/ios-cmake.git
+          TC=$W/ios-cmake/ios.toolchain.cmake
+
+          # OpenSSL
+          git clone --depth 1 --branch openssl-3.0.15 https://github.com/openssl/openssl.git
+          (cd openssl && ./Configure ios64-xcrun no-shared no-tests no-apps no-ui-console no-async --prefix=$P -mios-version-min=18.0 \
+            && make -j$(sysctl -n hw.ncpu) build_libs && make install_dev)
+
+          # Opus
+          git clone --depth 1 --branch v1.5.2 https://github.com/xiph/opus.git
+          cmake -S opus -B opus/b -G Ninja -DCMAKE_TOOLCHAIN_FILE=$TC -DPLATFORM=OS64 -DDEPLOYMENT_TARGET=18.0 \
+            -DCMAKE_INSTALL_PREFIX=$P -DOPUS_BUILD_PROGRAMS=OFF -DOPUS_BUILD_TESTING=OFF \
+            -DBUILD_SHARED_LIBS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          cmake --build opus/b && cmake --install opus/b
+
+          # Chiaki (chỉ phần lõi)
+          git clone --recursive --depth 1 https://github.com/thestr4ng3r/chiaki.git
+          cmake -S chiaki -B chiaki/b -G Ninja -DCMAKE_TOOLCHAIN_FILE=$TC -DPLATFORM=OS64 -DDEPLOYMENT_TARGET=18.0 \
+            -DCMAKE_FIND_ROOT_PATH=$P -DCMAKE_PREFIX_PATH=$P -DOPENSSL_ROOT_DIR=$P -DOPENSSL_USE_STATIC_LIBS=TRUE \
+            -DCHIAKI_ENABLE_GUI=OFF -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_TESTS=OFF -DCHIAKI_ENABLE_ANDROID=OFF \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DPYTHON_EXECUTABLE=$W/venv/bin/python3
+          cmake --build chiaki/b
+
+          OUT=$W/out; mkdir -p $OUT/lib $OUT/include
+          find chiaki/b $P/lib -name '*.a' -exec cp {} $OUT/lib/ \;
+          cp -R chiaki/lib/include/. $OUT/include/
+          test -n "$(ls $OUT/lib/*.a)"
+          rm -rf $GITHUB_WORKSPACE/ConsoleSub-github/chiaki-prebuilt
+          mv $OUT $GITHUB_WORKSPACE/ConsoleSub-github/chiaki-prebuilt
+
+      - name: Build app
+        working-directory: ConsoleSub-github
         run: |
+          brew install xcodegen
+          EXTRA=()
+          if ls chiaki-prebuilt/lib/*.a >/dev/null 2>&1; then
+            echo ">>> Dùng Chiaki thật"
+            sed -i '' 's/- rp_shim.c/- rp_stub.c/' project.yml
+            LDF=""
+            for f in chiaki-prebuilt/lib/*.a; do LDF="$LDF $PWD/$f"; done
+            EXTRA=("HEADER_SEARCH_PATHS=$PWD/chiaki-prebuilt/include" "OTHER_LDFLAGS=\$(inherited) $LDF -lz")
+          else
+            echo ">>> Không có Chiaki, dùng bản giả"
+          fi
+          xcodegen generate
+          xcodebuild -project ConsoleSub.xcodeproj -scheme ConsoleSub \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            "${EXTRA[@]}" build
           mkdir Payload
-          cp -R build/Build/Products/Release-iphoneos/SubDich.app Payload/
-          zip -r SubDich.ipa Payload
+          cp -R build/Build/Products/Release-iphoneos/ConsoleSub.app Payload/
+          zip -qr ConsoleSub.ipa Payload
+
       - uses: actions/upload-artifact@v4
         with:
-          name: SubDich-ipa
-          path: SubDich.ipa
+          name: ConsoleSub-ipa
+          path: ConsoleSub-github/ConsoleSub.ipa

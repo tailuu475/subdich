@@ -61,7 +61,7 @@ jobs:
           rm -rf "$GITHUB_WORKSPACE/chiaki-prebuilt"
           mv $OUT "$GITHUB_WORKSPACE/chiaki-prebuilt"
 
-      - name: Build app
+            - name: Build app
         run: |
           cd "$APP_DIR"
           PRE="$GITHUB_WORKSPACE/chiaki-prebuilt"
@@ -77,15 +77,20 @@ jobs:
             echo ">>> Không có Chiaki, dùng bản giả"
           fi
           xcodegen generate
-          xcodebuild -project ConsoleSub.xcodeproj -scheme ConsoleSub \
+          PROJ=$(ls -d *.xcodeproj | head -1)
+          SCHEME=$(xcodebuild -list -project "$PROJ" | awk '/Schemes:/{f=1;next} f&&NF{print $1; exit}')
+          echo "Project=$PROJ Scheme=$SCHEME"
+          xcodebuild -project "$PROJ" -scheme "$SCHEME" \
             -configuration Release -sdk iphoneos -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             "${EXTRA[@]}" build
-          mkdir Payload
-          cp -R build/Build/Products/Release-iphoneos/ConsoleSub.app Payload/
-          zip -qr ConsoleSub.ipa Payload
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          echo "App=$APP"
+          rm -rf Payload; mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qr App.ipa Payload
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ConsoleSub-ipa
-          path: ${{ env.APP_DIR }}/ConsoleSub.ipa
+          name: ipa
+          path: ${{ env.APP_DIR }}/App.ipa

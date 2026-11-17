@@ -61,7 +61,7 @@ jobs:
           rm -rf "$GITHUB_WORKSPACE/chiaki-prebuilt"
           mv $OUT "$GITHUB_WORKSPACE/chiaki-prebuilt"
 
-            - name: Build app
+      - name: Build app
         run: |
           cd "$APP_DIR"
           PRE="$GITHUB_WORKSPACE/chiaki-prebuilt"
